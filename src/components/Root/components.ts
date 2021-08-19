@@ -1,8 +1,10 @@
 import { Alerts } from '@kubevious/ui-alerts';
 import { Diagram } from '@kubevious/ui-diagram';
-import { RuleEditor, MarkerEditor } from '@kubevious/ui-rule-engine'
 import { Properties, Summary } from '@kubevious/ui-properties'
 import { Timeline } from '@kubevious/ui-time-machine'
+
+import { RuleEditorPage } from '../RulesEngine/RuleEditorPage'
+import { MarkerEditorPage } from '../RulesEngine/MarkerEditorPage'
 
 import { GoldenLayoutWindowInfo, GoldenLayoutLocation } from '@kubevious/ui-components';
 
@@ -24,13 +26,13 @@ export const components : GoldenLayoutWindowInfo[] = [
     },
     {
         id: "ruleEditorComponent",
-        component: RuleEditor,
+        component: RuleEditorPage,
         location: GoldenLayoutLocation.main,
         title: "Rule Editor",
     },
     {
         id: "markerEditorComponent",
-        component: MarkerEditor,
+        component: MarkerEditorPage,
         location: GoldenLayoutLocation.main,
         title: "Marker Editor",
     },

@@ -1,6 +1,6 @@
 import _ from "the-lodash"
 import { SharedState } from "@kubevious/ui-framework/dist"
-import { IWebSocketService, WebSocketScope } from "@kubevious/ui-middleware"
+import { IWebSocketService, WebSocketScope } from "@kubevious/ui-middleware/dist/services/websocket"
 
 
 export class DiagramSource {

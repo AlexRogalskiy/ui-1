@@ -1,93 +1,104 @@
 import _ from 'the-lodash';
-import { HttpClient, ISharedState } from '@kubevious/ui-framework';
-import { IRuleService, IWebSocketService } from '@kubevious/ui-middleware';
+import { Promise } from 'the-promise'
+
+import { IRuleService } from '@kubevious/ui-middleware';
 
 import { BaseService } from './BaseService'
+import { RuleConfig, RuleListItem, RuleResult, RuleResultSubscriber, RulesExportData, RulesImportData, RuleStatus } from '@kubevious/ui-middleware/dist/services/rule';
 
 export class RuleService extends BaseService implements IRuleService {
 
-    constructor(client: HttpClient, sharedState: ISharedState, socket: IWebSocketService)
+    getList() : Promise<RuleListItem[]>
     {
-        super(client, sharedState, socket)
-
-        this._setupWebSocket();
+        return this.client
+            .get<RuleListItem[]>("/rules")
+            .then((result) => result.data);
     }
 
-    backendFetchRuleList(cb: (data: any) => any) : void {
-        this.client.get('/rules')
-            .then(result => {
-                cb(result.data);
-                return null;
-            });
-    }
-
-    backendFetchRule(id: string, cb: (data: any) => any) : void {
-        this.client.get('/rule/' + id)
-            .then(result => {
-                cb(result.data);
-                return null;
-            });
-    }
-
-    backendCreateRule(config: any, name: string, cb: (data: any) => any) : void {
-        this.client.post('/rule/' + name, config)
-            .then(result => {
-                cb(result.data)
-                return null;
-            });
-    }
-
-    backendDeleteRule(id: string, cb: (data: any) => any) : void {
-        this.client.delete('/rule/' + id)
-            .then(result => {
-                cb(result.data);
-                return null;
-            });
-    }
-
-    backendExportItems(cb: (data: any) => any) : void {
-        this.client.get('/rules/export')
-            .then(result => {
-                cb(result.data);
-                return null;
-            });
-    }
-
-    backendImportItems(rules: any, cb: (data: any) => any) : void {
-        this.client.post('/rules/import', rules)
-            .then(result => {
-                cb(result.data);
-                return null;
-            });
-    }
-
-    private _setupWebSocket()
+    getItem(name: string) : Promise<RuleConfig | null>
     {
-        this.sharedState.set('rule_editor_items', []);
+        return this.client
+            .get<RuleConfig | null>("/rule", { rule: name })
+            .then((result) => result.data);
+    }
 
-        this._socketSubscribe({ kind: 'rules-statuses' }, value => {
-            if (!value) {
-                value = [];
-            }
-            this.sharedState.set('rule_editor_items', value)
+    createItem(config: RuleConfig, name: string) : Promise<RuleConfig>
+    {
+        return this.client
+            .post<RuleConfig>("/rule", { rule: name }, config)
+            .then((result) => {
+                return result.data;
+            });
+    }    
+    
+    deleteItem(name: string) : Promise<void>
+    {
+        return this.client
+            .delete("/rule", { rule: name })
+            .then((result) => {
+                return result.data;
+            });
+    }    
+    
+    exportItems() : Promise<RulesExportData>
+    {
+        return this.client
+            .get<RulesExportData>("/export-rules")
+            .then((result) => result.data);
+    }    
+    
+    importItems(data: RulesImportData) : Promise<void>
+    {
+        return this.client
+            .post("/import-rules", { }, data)
+            .then((result) => {
+                return result.data
+            });
+    }    
+    
+    getItemStatuses() : Promise<RuleStatus[]>
+    {
+        return this.client
+            .get<RuleStatus[]>("/rules-statuses")
+            .then((result) => result.data);
+    }    
+    
+    getItemResult(name: string) : Promise<RuleResult>
+    {
+        return this.client
+            .get<RuleResult>("/rule-result", { rule: name })
+            .then((result) => result.data);
+    }    
+
+    subscribeItemStatuses(cb: ((items: RuleStatus[]) => void)): void
+    {
+        this.socket.subscribe({ kind: 'rules-statuses' }, (value) => {
+            cb(value);
+        })
+    }
+
+    subscribeItemResult(cb: ((result: RuleResult) => void)): RuleResultSubscriber
+    {
+        const wsScope = this.socket.scope((value, target) => {
+            cb(value);
         });
 
-        const selectedRuleScope = this._socketScope((value, target) => {
+        return {
+            update: (name: string | null) => {
 
-            this.sharedState.set('rule_editor_selected_rule_status', value);
-
-        });
-
-        this.sharedState.subscribe('rule_editor_selected_rule_id',
-            (rule_editor_selected_rule_id) => {
-
-                selectedRuleScope.replace([
-                    { 
+                if (name) {
+                    wsScope.replace([{   
                         kind: 'rule-result',
-                        name: rule_editor_selected_rule_id
-                    }
-                ]);
+                        name: name
+                    }])
+                } else {
+                    wsScope.replace([])
+                }
 
-            });
+            },
+            close: () => {
+                wsScope.close();
+            }
+        }
     }
 }

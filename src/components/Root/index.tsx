@@ -1,6 +1,5 @@
 import React from "react"
 import _ from "the-lodash"
-import "./styles.scss"
 import { ClassComponent } from "@kubevious/ui-framework"
 import { FieldsSaver } from "../../utils/save-fields"
 import { ErrorBox, Popup } from '@kubevious/ui-components';
@@ -10,6 +9,8 @@ import { SEO } from "../SEO"
 import { RootState } from "./types"
 import { sharedState } from "../../configureService";
 import { components } from "./components";
+
+import "./styles.scss"
 
 export class Root extends ClassComponent<{}, RootState> {
     private _fieldsSaver: FieldsSaver

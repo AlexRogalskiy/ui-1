@@ -3,8 +3,9 @@ MY_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE
 MY_DIR="$(dirname $MY_PATH)"
 cd $MY_DIR
 
-npm update \
+npm-check-updates -u \
     the-lodash \
+    the-promise \
     @kubevious/ui-framework \
     @kubevious/ui-middleware \
     @kubevious/ui-components \
@@ -13,5 +14,6 @@ npm update \
     @kubevious/ui-properties \
     @kubevious/ui-rule-engine \
     @kubevious/ui-time-machine \
+    @kubevious/ui-search \
     @kubevious/helpers \
     @kubevious/websocket-client

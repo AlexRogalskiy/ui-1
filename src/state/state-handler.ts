@@ -7,7 +7,7 @@ import { SharedState } from "@kubevious/ui-framework/dist"
 import { IDiagramService } from "@kubevious/ui-middleware"
 import { TimelineUtils } from "@kubevious/ui-time-machine"
 import { PersistableParams } from "../types"
-import { ChartData } from "@kubevious/ui-time-machine/dist/Timeline/type"
+import { TimelineDataPoint } from "@kubevious/ui-time-machine/dist/Timeline/type"
 
 export class StateHandler {
     private _timelineUtils: TimelineUtils
@@ -271,7 +271,7 @@ export class StateHandler {
             )
     }
 
-    _massageTimelineData(data: ChartData[]): ChartData[] {
+    _massageTimelineData(data: TimelineDataPoint[]): TimelineDataPoint[] {
         if (!data || data.length === 0) {
             let date = moment()
             return [
@@ -396,10 +396,7 @@ export class StateHandler {
                     markerDict = _.makeDict(
                         marker_editor_items,
                         (x: { name: any }) => x.name,
-                        (x: { shape: any; color: any }) => ({
-                            shape: x.shape,
-                            color: x.color,
-                        })
+                        ((x: any) => x)
                     )
                 }
 

@@ -7,7 +7,7 @@ import { ISharedState } from '@kubevious/ui-framework'
 import { IWebSocketService } from '@kubevious/ui-middleware'
 
 import { GRAPH_DATA } from '../boot/diagramMockData'
-import { WebSocketTarget, WebSocketSubscription, WebSocketScope } from '@kubevious/ui-middleware';
+import { WebSocketTarget, WebSocketSubscription, WebSocketScope } from '@kubevious/ui-middleware/dist/services/websocket';
 
 export class MockWebSocketService implements IWebSocketService
 {

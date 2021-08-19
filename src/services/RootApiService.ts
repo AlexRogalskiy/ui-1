@@ -7,6 +7,7 @@ import { MarkerService } from './MarkerService'
 import { MiscService } from './MiscService'
 
 import { app } from '@kubevious/ui-framework';
+import { SearchService } from './SearchService'
 
 export class RootApiService {
     constructor() {
@@ -32,6 +33,11 @@ export class RootApiService {
         app.registerService({ kind: 'diagram' }, () => {
             const client = app.httpClient('/api/v1');
             return new DiagramService(client, sharedState, this.socketService());
+        });
+
+        app.registerService({ kind: 'search' }, () => {
+            const client = app.httpClient('/api/v1');
+            return new SearchService(client, sharedState, this.socketService());
         });
 
         app.registerService({ kind: 'misc' }, () => {

@@ -86,18 +86,6 @@ export class MockDiagramService implements IDiagramService {
         }, 200)
     }
 
-    fetchSearchResults(criteria, cb) {
-        if (!criteria) {
-            cb([])
-            return
-        }
-        let res = getRandomDnList()
-        let res2 = res.map((x) => ({
-            dn: x,
-        }))
-        cb(res2)
-    }
-
     fetchHistoryRange(cb) {
         cb(HISTORY_RANGE)
     }
@@ -216,16 +204,4 @@ export class MockDiagramService implements IDiagramService {
         }
         cb(_.cloneDeep(HISTORY_ALERTS))
     }
-
-    fetchAutocompleteKeys(
-        type: string,
-        criteria: any,
-        cb: (data: any) => any
-    ): void {}
-
-    fetchAutocompleteValues(
-        type: string,
-        criteria: any,
-        cb: (data: any) => any
-    ): void {}
 }

@@ -4,7 +4,7 @@ import bugImg from "../../assets/header-btns/bug.svg"
 import slackImg from "../../assets/header-btns/slack.svg"
 import githubImg from "../../assets/header-btns/github.svg"
 import { About } from "../About"
-import { Search } from "../Search"
+import { SearchPage } from "../Search"
 import { Notifications } from "../Notifications"
 import { ClassComponent } from "@kubevious/ui-framework"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
@@ -15,6 +15,9 @@ import "./styles.scss"
 import { IMiscService } from "@kubevious/ui-middleware"
 import { GoldenLayoutWindowInfo } from "@kubevious/ui-components"
 import { HeaderProps, HeaderState } from "./types"
+import cx from "classnames"
+
+import btnStyles from './btn-styles.module.css';
 
 export class Header extends ClassComponent<HeaderProps, HeaderState, IMiscService> {
     constructor(props : HeaderProps | Readonly<HeaderProps>) {
@@ -55,7 +58,7 @@ export class Header extends ClassComponent<HeaderProps, HeaderState, IMiscServic
     openSearch(): void {
         this.sharedState.set("popup_window", {
             title: "Search",
-            content: <Search />,
+            content: <SearchPage />,
         })
     }
 
@@ -204,10 +207,10 @@ export class Header extends ClassComponent<HeaderProps, HeaderState, IMiscServic
                             <button
                                 id="btnNotifications"
                                 type="button"
-                                className="btn btn-notifications"
+                                className={cx(btnStyles.headerBtn, btnStyles.headerBtnNotifications )}
                                 onClick={this.openNotifications}
                             ></button>
-                            <span className="tooltiptext">Notifications</span>
+                            <span className={btnStyles.tooltiptext}>Notifications</span>
                         </div>
                     )}
 
@@ -215,15 +218,15 @@ export class Header extends ClassComponent<HeaderProps, HeaderState, IMiscServic
                         <button
                             id="btnHeaderSearch"
                             type="button"
-                            className="btn btn-search"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnSearch )}
                             onClick={this.openSearch}
                         />
-                        <span className="tooltiptext">Object Search</span>
+                        <span className={btnStyles.tooltiptext}>Object Search</span>
                     </div>
 
                     <div className="btn-container">
                         <button
-                            className="btn btn-settings"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnSettings )}
                             onMouseEnter={() =>
                                 this.setState({ showSettings: true })
                             }
@@ -238,43 +241,43 @@ export class Header extends ClassComponent<HeaderProps, HeaderState, IMiscServic
                         <button
                             id="btnHeaderAbout"
                             type="button"
-                            className="btn btn-about"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnAbout )}
                             onClick={this.openAbout}
                         ></button>
-                        <span className="tooltiptext">About Kubevious</span>
+                        <span className={btnStyles.tooltiptext}>About Kubevious</span>
                     </div>
 
                     <div className="btn-container">
                         <a
                             href="https://github.com/kubevious/kubevious/issues/new/choose"
                             target="_blank"
-                            className="btn btn-bug"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnBug )}
                         >
                             <img src={bugImg} alt="bug" />
                         </a>
-                        <span className="tooltiptext">Report Issues</span>
+                        <span className={btnStyles.tooltiptext}>Report Issues</span>
                     </div>
 
                     <div className="btn-container">
                         <a
                             href="https://github.com/kubevious/kubevious"
                             target="_blank"
-                            className="btn btn-github"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnGithub )}
                         >
                             <img src={githubImg} alt="github" />
                         </a>
-                        <span className="tooltiptext">GitHub Project</span>
+                        <span className={btnStyles.tooltiptext}>GitHub Project</span>
                     </div>
 
                     <div className="btn-container">
                         <a
                             href="https://kubevious.io/slack"
                             target="_blank"
-                            className="btn btn-slack"
+                            className={cx(btnStyles.headerBtn, btnStyles.headerBtnSlack )}
                         >
                             <img src={slackImg} alt="slack" />
                         </a>
-                        <span className="tooltiptext">Slack Channel</span>
+                        <span className={btnStyles.tooltiptext}>Slack Channel</span>
                     </div>
                 </div>
             </div>

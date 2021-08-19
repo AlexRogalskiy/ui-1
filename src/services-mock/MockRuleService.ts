@@ -1,4 +1,8 @@
 import _ from "the-lodash"
+import { Promise } from 'the-promise'
+
+import { v4 as uuid } from 'uuid';
+
 import { MOCK_MARKERS } from "./MockMarkerService"
 import { MockRootApiService } from "./MockRootApiService"
 
@@ -8,8 +12,9 @@ import { ISharedState } from "@kubevious/ui-framework"
 import { getRandomDnList } from "./utils"
 
 import { IRuleService } from "@kubevious/ui-middleware"
+import { RuleConfig, RuleListItem, RuleResult, RuleResultSubscriber, RulesExportData, RulesImportData, RuleStatus } from "@kubevious/ui-middleware/dist/services/rule";
 
-let MOCK_RULES_ARRAY = [
+let MOCK_RULES_ARRAY : any[] = [
     {
         enabled: true,
         name: "rule 1",
@@ -42,6 +47,11 @@ export class MockRuleService implements IRuleService {
     private sharedState: ISharedState
     private _remoteTrack: RemoteTrack
 
+    private _allItemsSubscribers : Record<string, (items: RuleStatus[]) => void> = {}
+    private _itemResultSubscribers : Record<string, { name: string | null, cb: (result: RuleResult) => void }> = {}
+
+    private _timer : NodeJS.Timeout | null;
+
     constructor(parent: MockRootApiService, sharedState: ISharedState) {
         this.parent = parent
         this.sharedState = sharedState
@@ -49,7 +59,7 @@ export class MockRuleService implements IRuleService {
 
         this._notifyRules()
 
-        setInterval(() => {
+        this._timer = setInterval(() => {
             for (const x of _.values(MOCK_RULES)) {
                 x.is_current = true
                 x.items = []
@@ -99,7 +109,16 @@ export class MockRuleService implements IRuleService {
         )
     }
 
-    close() {}
+    close()
+    {
+        this._allItemsSubscribers = {}
+        this._itemResultSubscribers = {}
+        if (this._timer)
+        {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+    }
 
     private _notifyRules() {
         const id = new Date().toISOString();
@@ -110,13 +129,21 @@ export class MockRuleService implements IRuleService {
             headers: {}
         })
 
-        this.backendFetchRuleList((result) => {
-            this.sharedState.set("rule_editor_items", result)
-        })
-
-        const name = this.sharedState.get("rule_editor_selected_rule_id")
-        if (name) {
-            this._notifyRuleStatus(name)
+        {
+            const results = this._getItemStatuses();
+            for(let x of _.values(this._allItemsSubscribers))
+            {
+                x(results);
+            }
+        }
+        
+        for(let resultSubscriber of _.values(this._itemResultSubscribers))
+        {
+            if (resultSubscriber.name)
+            {
+                const result = this._getItemResult(resultSubscriber.name);
+                resultSubscriber.cb(result!);
+            }
         }
 
         setTimeout(() => {
@@ -168,71 +195,177 @@ export class MockRuleService implements IRuleService {
         return item
     }
 
-    backendFetchRuleList(cb: (data: any) => any): void {
-        let list = _.values(MOCK_RULES)
-        list = list.map((x) => this._makeRuleListItem(x))
-        setTimeout(() => {
-            cb(list)
-        }, 100)
+    getList() : Promise<RuleListItem[]> {
+        const allRules = _.values(MOCK_RULES);
+        const list = allRules.map(x => {
+            const item : RuleListItem = {
+                name: x.name,
+                enabled: x.enabled
+            }
+            return item;
+        });
+
+        return Promise.timeout(100).then(() => list);
     }
 
-    backendFetchRule(name: string, cb: (data: any) => any): void {
-        const item = MOCK_RULES[name]
-        let ruleItem = this._makeRuleItem(item)
-        setTimeout(() => {
-            cb(ruleItem)
-        }, 500)
+    getItem(name: string) : Promise<RuleConfig | null>
+    {
+        return Promise.timeout(500).then(() => {
+            let innerRule = MOCK_RULES[name];
+            if (!innerRule) {
+                return null;
+            }
+
+            const item : RuleConfig = {
+                name: innerRule.name,
+                script: innerRule.script,
+                target: innerRule.target,
+                enabled: innerRule.enabled,
+            }
+
+            return item;
+        });
     }
 
-    backendCreateRule(rule: any, name: string, cb: (data: any) => any): void {
-        rule = _.clone({ ...rule, items: [], logs: [] })
+    createItem(config: RuleConfig, name: string) : Promise<RuleConfig>
+    {
+        const rule = _.clone({ ...config, items: [], logs: [] })
 
-        if (MOCK_RULES[name]) {
-            this._backendUpdateRule(rule, name, cb)
-            return
-        }
+        console.error('CREATEITEM', config, name)
+
+        delete MOCK_RULES[name];
 
         MOCK_RULES[rule.name] = rule
 
-        cb(rule)
-        this._notifyRules()
-    }
+        this._notifyRules();
 
-    _backendUpdateRule(rule, name, cb) {
-        MOCK_RULES[rule.name] = _.clone({ ...rule, items: [], logs: [] })
+        return Promise.resolve(config);
+    }    
 
-        delete MOCK_RULES[name]
+    deleteItem(name: string) : Promise<void>
+    {
+        delete MOCK_RULES[name];
 
-        cb(rule)
-        this._notifyRules()
-    }
+        this._notifyRules();
 
-    backendDeleteRule(id: string, cb: (data: any) => any): void {
-        delete MOCK_RULES[id]
-        cb({})
-        this._notifyRules()
-    }
+        return Promise.resolve();
+    }    
 
-    backendExportItems(cb: (data: any) => any): void {
-        const data = {
-            kind: "rules",
-            items: _.cloneDeep(_.values(MOCK_RULES)),
-        }
-        cb(data)
-    }
+    exportItems() : Promise<RulesExportData>
+    {
+        const internalRules = _.cloneDeep(_.values(MOCK_RULES));
+        const data : RuleConfig[] = internalRules.map(x => ({
+            name: x.name,
+            target: x.target,
+            script: x.script,
+            enabled: x.enabled
+        }));
 
-    backendImportItems(rules: any, cb: (data: any) => any): void {
-        if (rules.deleteExtra) {
-            MOCK_RULES = []
+
+        const response : RulesExportData = {
+            kind: 'rules',
+            items: data,
         }
 
-        for (const x of rules.data.items) {
-            x.items = []
-            x.logs = []
-            MOCK_RULES[x.name] = x
+        return Promise.resolve(response);
+    }    
+    
+    importItems(data: RulesImportData) : Promise<void>
+    {
+        if (data.deleteExtra) {
+            MOCK_RULES = {};
         }
 
-        cb({})
-        this._notifyRules()
+        for (const config of data.data.items) {
+            const item = _.clone({ ...config, items: [], logs: [] });
+            MOCK_RULES[item.name] = item;
+        }
+
+        this._notifyRules();
+
+        return Promise.resolve();
+    }   
+
+    getItemStatuses() : Promise<RuleStatus[]> {
+        return Promise.timeout(100).then(() => this._getItemStatuses());
+    }
+
+    getItemResult(name: string) : Promise<RuleResult> { //  | null
+        return Promise.timeout(500).then(() => {
+            return this._getItemResult(name)!
+        });
+    }
+
+
+    subscribeItemStatuses(cb: (items: RuleStatus[]) => void)
+    {
+        const id = uuid();
+        this._allItemsSubscribers[id] = cb;
+
+        cb(this._getItemStatuses());
+    }
+
+    subscribeItemResult(cb: (result: RuleResult) => void) : RuleResultSubscriber
+    {
+        const id = uuid();
+        this._itemResultSubscribers[id] = {
+            name: null,
+            cb: cb
+        };
+
+        return {
+            update: (name: string | null) => {
+
+                if (this._itemResultSubscribers[id]) {
+                    this._itemResultSubscribers[id].name = null;
+                    if (name) {
+                        this._itemResultSubscribers[id].name = name;
+
+                        const result = this._getItemResult(name);
+                        if (result) {
+                            cb(result);
+                        }
+                    }
+                }
+
+
+            },
+            close: () => {
+                delete this._itemResultSubscribers[id];
+            }
+        }
+    }
+
+    private _getItemStatuses() : RuleStatus[] {
+        const allRules = _.values(MOCK_RULES);
+        const list = allRules.map(x => {
+            const item : RuleStatus = {
+                name: x.name,
+                enabled: x.enabled,
+                is_current: x.is_current,
+                error_count: x.logs.length,
+                item_count: x.items.length,
+            }
+            return item;
+        });
+        return list;
+    }
+
+    private _getItemResult(name: string) : RuleResult | null
+    {
+        let innerRule = MOCK_RULES[name];
+        if (!innerRule) {
+            return null;
+        }
+
+        const item : RuleResult = {
+            name: innerRule.name,
+            items: innerRule.items,
+            is_current: innerRule.is_current,
+            error_count: innerRule.logs.length,
+            logs: innerRule.logs
+        }
+
+        return item;
     }
 }

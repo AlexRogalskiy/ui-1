@@ -1,4 +1,7 @@
-import _ from 'the-lodash'
+import _ from "the-lodash"
+import { Promise } from 'the-promise'
+
+import { v4 as uuid } from 'uuid';
 
 import { COLORS, SHAPES } from '../boot/markerData'
 
@@ -9,6 +12,7 @@ import { getRandomDnList } from './utils';
 import { MockRootApiService } from './MockRootApiService';
 
 import { IMarkerService } from '@kubevious/ui-middleware'
+import { MarkerConfig, MarkerListItem, MarkerResult, MarkerResultSubscriber, MarkersExportData, MarkersImportData, MarkerStatus } from "@kubevious/ui-middleware/dist/services/marker"
 
 const MOCK_MARKERS_ARRAY : any[] = []
 
@@ -31,6 +35,11 @@ export class MockMarkerService implements IMarkerService {
     private sharedState : ISharedState;
     private _remoteTrack : RemoteTrack;
 
+    private _allItemsSubscribers : Record<string, (items: MarkerStatus[]) => void> = {}
+    private _itemResultSubscribers : Record<string, { name: string | null, cb: (result: MarkerResult) => void }> = {}
+
+    private _timer : NodeJS.Timeout | null;
+
     constructor(parent: MockRootApiService, sharedState: ISharedState)
     {
         this.parent = parent;
@@ -39,7 +48,7 @@ export class MockMarkerService implements IMarkerService {
         
         this._notifyMarkers();
 
-        setInterval(() => {
+        this._timer = setInterval(() => {
 
             for (const marker of _.values(MOCK_MARKERS)) {
                 const dnList = getRandomDnList();
@@ -52,19 +61,22 @@ export class MockMarkerService implements IMarkerService {
 
         }, 5000);
 
-        this.sharedState.subscribe('marker_editor_selected_marker_id',
-            (marker_editor_selected_marker_id) => {
-                this._notifyMarkerStatus(marker_editor_selected_marker_id);
-            })
     }
 
     close()
     {
-        
+        this._allItemsSubscribers = {}
+        this._itemResultSubscribers = {}
+        if (this._timer)
+        {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
     }
 
     private _notifyMarkers() {
         const id = new Date().toISOString();
+
         this._remoteTrack.start({
             id: id,
             method: 'GET',
@@ -72,13 +84,21 @@ export class MockMarkerService implements IMarkerService {
             headers: {}
         })
 
-        this.backendFetchMarkerList((result) => {
-            this.sharedState.set('marker_editor_items', result);
-        })
-
-        const name = this.sharedState.get('marker_editor_selected_marker_id');
-        if (name) {
-            this._notifyMarkerStatus(name);
+        {
+            const results = this._getItemStatuses();
+            for(let x of _.values(this._allItemsSubscribers))
+            {
+                x(results);
+            }
+        }
+        
+        for(let resultSubscriber of _.values(this._itemResultSubscribers))
+        {
+            if (resultSubscriber.name)
+            {
+                const result = this._getItemResult(resultSubscriber.name);
+                resultSubscriber.cb(result!);
+            }
         }
 
         setTimeout(() => {
@@ -91,115 +111,174 @@ export class MockMarkerService implements IMarkerService {
         }, 1000)
     }
 
-    private _notifyMarkerStatus(name) {
-        const marker = MOCK_MARKERS[name];
-        let data : any = null;
-        if (marker) {
-            data = {
-                name: marker.name,
-                is_current: marker.is_current,
-                error_count: marker.logs.length,
+    getList() : Promise<MarkerListItem[]> {
+        const allMarkers = _.values(MOCK_MARKERS);
+        const list = allMarkers.map(x => {
+            const item : MarkerListItem = {
+                name: x.name,
+                shape: x.shape,
+                color: x.color
             }
-            data.items = marker.items;
-            data.logs = marker.logs;
-        }
-        this.sharedState.set('rule_editor_selected_marker_status', data);
+            return item;
+        });
+
+        return Promise.timeout(100).then(() => list);
     }
 
-    private _makeMarkerListItem(x) {
-        if (!x) {
-            return null;
-        }
-        return {
-            name: x.name,
-            shape: x.shape,
-            color: x.color,
-            item_count: x.items.length,
-            error_count: x.logs.length,
-            is_current: x.is_current,
-        }
+    getItem(name: string) : Promise<MarkerConfig | null> {
+        return Promise.timeout(500).then(() => {
+            let innerMarker = MOCK_MARKERS[name];
+            if (!innerMarker) {
+                return null;
+            }
+
+            const item : MarkerConfig = {
+                name: innerMarker.name,
+                shape: innerMarker.shape,
+                color: innerMarker.color,
+                propagate: false
+            }
+            return item;
+        });
     }
 
-    private _makeMarkerItem(x) {
-        const item = this._makeMarkerListItem(x);
-        if (!item) {
-            return null;
-        }
-        return item;
-    }
-
-    backendFetchMarkerList(cb: (data: any) => any) : void {
-        let list = _.values(MOCK_MARKERS);
-        list = list.map(x => this._makeMarkerListItem(x));
-        setTimeout(() => {
-            cb(list);
-        }, 100);
-    }
-
-    backendFetchMarker(name: string, cb: (data: any) => any) : void {
-        let item = MOCK_MARKERS[name];
-        item = this._makeMarkerItem(item);
-        setTimeout(() => {
-            cb(item);
-        }, 500);
-    }
-
-    backendCreateMarker(marker: any, name: string, cb: (data: any) => any) : void {
-        marker = _.clone({ ...marker, items: [], logs: [] });
-
-        if (MOCK_MARKERS[name]) {
-            this._backendUpdateMarker(marker, name, cb)
-            return
-        }
-
-        MOCK_MARKERS[marker.name] = marker
-
-        cb(marker);
-        this._notifyMarkers();
-    }
-
-    private _backendUpdateMarker(marker, name, cb) {
-        MOCK_MARKERS[marker.name] = _.clone({ ...marker });
+    createItem(config: MarkerConfig, name: string) : Promise<any>
+    {
+        const marker = _.clone({ ...config, items: [], logs: [] });
 
         delete MOCK_MARKERS[name]
 
-        cb(marker)
+        MOCK_MARKERS[marker.name] = marker
+
         this._notifyMarkers();
+
+        return Promise.resolve();
     }
 
-    backendDeleteMarker(name: string, cb: (data: any) => any) : void{
+    deleteItem(name: string) : Promise<void>
+    {
         delete MOCK_MARKERS[name];
-        cb({});
+
         this._notifyMarkers();
+
+        return Promise.resolve();
     }
 
-    backendExportItems(cb: (data: any) => any) : void {
-        let data = _.cloneDeep(_.values(MOCK_MARKERS));
-        data = data.map(x => ({
+    exportItems() : Promise<MarkersExportData>
+    {
+        const internalMarkers = _.cloneDeep(_.values(MOCK_MARKERS));
+        const data : MarkerConfig[] = internalMarkers.map(x => ({
             name: x.name,
             shape: x.shape,
             color: x.color,
+            propagate: false
         }));
 
-        const response = {
+        const response : MarkersExportData = {
             kind: 'markers',
             items: data,
         }
-        cb(response);
+
+        return Promise.resolve(response);
     }
 
-    backendImportItems(markers: any, cb: (data: any) => any) : void {
-        if (markers.deleteExtra) {
+    importItems(data: MarkersImportData) : Promise<void>
+    {
+        if (data.deleteExtra) {
             MOCK_MARKERS = {};
         }
 
-        for (const x of markers.data.items) {
-            x.items = []
-            x.logs = []
-            MOCK_MARKERS[x.name] = x;
+        for (const config of data.data.items) {
+            const item = _.clone({ ...config, items: [], logs: [] });
+            MOCK_MARKERS[item.name] = item;
         }
 
-        cb({});
         this._notifyMarkers();
+
+        return Promise.resolve();
     }
+
+    getItemStatuses() : Promise<MarkerStatus[]> {
+        return Promise.timeout(100).then(() => this._getItemStatuses());
+    }
+
+    getItemResult(name: string) : Promise<MarkerResult> { //  | null
+        return Promise.timeout(500).then(() => {
+            return this._getItemResult(name)!
+        });
+    }
+
+    subscribeItemStatuses(cb: (items: MarkerStatus[]) => void)
+    {
+        const id = uuid();
+        this._allItemsSubscribers[id] = cb;
+
+        cb(this._getItemStatuses());
+    }
+
+    subscribeItemResult(cb: (result: MarkerResult) => void) : MarkerResultSubscriber
+    {
+        const id = uuid();
+        this._itemResultSubscribers[id] = {
+            name: null,
+            cb: cb
+        };
+
+        return {
+            update: (name: string | null) => {
+
+                if (this._itemResultSubscribers[id]) {
+                    this._itemResultSubscribers[id].name = null;
+                    if (name) {
+                        this._itemResultSubscribers[id].name = name;
+
+                        const result = this._getItemResult(name);
+                        if (result) {
+                            cb(result);
+                        }
+                    }
+                }
+
+
+            },
+            close: () => {
+                delete this._itemResultSubscribers[id];
+            }
+        }
+    }
+
+
+    private _getItemStatuses() : MarkerStatus[] {
+        const allMarkers = _.values(MOCK_MARKERS);
+        const list = allMarkers.map(x => {
+            const item : MarkerStatus = {
+                name: x.name,
+                shape: x.shape,
+                color: x.color,
+                item_count: x.items.length
+            }
+            return item;
+        });
+        return list;
+    }
+
+    private _getItemResult(name: string) : MarkerResult | null
+    {
+        let innerMarker = MOCK_MARKERS[name];
+        if (!innerMarker) {
+            return null;
+        }
+
+        const item : MarkerResult = {
+            name: innerMarker.name,
+            items: innerMarker.items.map(x => {
+                return {
+                    dn: x.dn
+                }
+            })
+        }
+
+        return item;
+    }
+
 }
